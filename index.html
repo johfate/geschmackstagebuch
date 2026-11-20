@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Geschmackstagebuch</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#EDF1EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1513" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+@font-face{font-family:"Bricolage";src:url("font.woff2") format("woff2");font-weight:200 800;font-stretch:75% 100%;font-display:swap}
+:root{
+  --bg:#EDF1EF; --surface:#FFFFFF; --surface2:#E2E8E5; --ink:#14201C; --muted:#5B6964; --line:#D5DDD9;
+  --accent:#0E7C66; --on-accent:#FFFFFF; --danger:#B4382A;
+  --score-bg-l:92%; --score-fg-l:27%; --score-s:62%;
+  --r-lg:22px; --r-md:14px; --r-sm:10px;
+  --shadow:0 1px 0 rgba(20,32,28,.04), 0 8px 24px -12px rgba(20,32,28,.18);
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0F1513; --surface:#18201D; --surface2:#232D29; --ink:#E6EEEA; --muted:#93A29C; --line:#2B3632;
+  --accent:#4FC7A8; --on-accent:#05221B; --danger:#F07A68;
+  --score-bg-l:19%; --score-fg-l:74%; --score-s:48%;
+  --shadow:0 1px 0 rgba(0,0,0,.2), 0 10px 28px -14px rgba(0,0,0,.6);
+  color-scheme:dark;
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:400 16px/1.45 "Bricolage",system-ui,sans-serif;font-optical-sizing:auto;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:8px}
+.app{max-width:520px;margin:0 auto;min-height:100dvh;position:relative}
+
+/* Kopfleiste */
+.bar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:4px;padding:calc(8px + var(--safe-t)) 8px 8px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
+.bar.scrolled{border-color:var(--line)}
+.bar .t{flex:1;font-weight:650;font-size:17px;opacity:0;transform:translateY(4px);transition:opacity .18s,transform .18s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.bar.scrolled .t{opacity:1;transform:none}
+.ib{width:44px;height:44px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;color:var(--ink)}
+.ib:active{background:var(--surface2)}
+.ib svg{width:24px;height:24px}
+
+main{padding:0 20px calc(120px + var(--safe-b))}
+.screen{animation:none}
+.push .screen{animation:pushIn .28s cubic-bezier(.2,.8,.2,1)}
+.pop .screen{animation:popIn .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes pushIn{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Typo */
+.lt{font-size:34px;line-height:1.08;font-weight:720;letter-spacing:-.02em;margin:6px 0 4px;font-stretch:92%}
+.lead{color:var(--muted);margin:0 0 20px;font-size:15px}
+h2.sh{font-size:17px;font-weight:650;margin:28px 0 10px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.num{font-variant-numeric:tabular-nums}
+
+/* Score-Farbe: Qualität als Farbton */
+.sc{--h:150;display:inline-grid;place-items:center;min-width:48px;height:34px;padding:0 10px;border-radius:999px;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;background:hsl(var(--h) var(--score-s) var(--score-bg-l));color:hsl(var(--h) 70% var(--score-fg-l));flex:none}
+.sc.none{background:var(--surface2);color:var(--muted);font-weight:500}
+.sc.lg{height:40px;min-width:58px;font-size:19px}
+
+/* Suche */
+.search{position:relative;margin:0 0 16px}
+.search input{width:100%;height:48px;border-radius:var(--r-md);border:1px solid transparent;background:var(--surface2);padding:0 16px 0 44px;font-size:16px}
+.search input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.search svg{position:absolute;left:14px;top:14px;width:20px;height:20px;color:var(--muted)}
+
+/* Kategorie-Kacheln */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{position:relative;background:var(--surface);border:0;border-radius:var(--r-lg);padding:16px;text-align:left;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px;min-height:168px;transition:transform .12s}
+.tile:active{transform:scale(.97)}
+.tile .em{font-size:34px;line-height:1;margin-bottom:auto}
+.tile .nm{font-weight:680;font-size:17px;line-height:1.2;margin-top:14px;overflow-wrap:anywhere}
+.tile .ct{font-size:13px;color:var(--muted)}
+.tile .best{display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
+.tile .best>span:first-child{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;padding-top:4px}
+.tile .best .sc{height:26px;min-width:40px;font-size:14px;padding:0 8px}
+.tile.add{background:transparent;box-shadow:none;border:1.5px dashed var(--line);align-items:center;justify-content:center;color:var(--muted);font-weight:600}
+.tile.add .em{margin:0;font-size:28px}
+
+/* Liste */
+.list{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
+.li{display:flex;align-items:center;gap:12px;padding:12px 14px;width:100%;border:0;background:transparent;text-align:left;position:relative}
+.li+.li::before{content:"";position:absolute;top:0;left:66px;right:0;border-top:1px solid var(--line)}
+.li:active{background:var(--surface2)}
+.li .main{flex:1;min-width:0}
+.li .nm{font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.av{width:42px;height:42px;border-radius:12px;flex:none;object-fit:cover;background:var(--surface2);display:grid;place-items:center;font-weight:700;color:var(--muted);font-size:17px}
+.rk{position:absolute;left:8px;top:6px;min-width:20px;height:20px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:11px;font-weight:700;display:grid;place-items:center;padding:0 5px;border:2px solid var(--surface)}
+.li.top .rk{background:#C89317;color:#fff}
+.av-wrap{position:relative;flex:none}
+.av-wrap .rk{left:-6px;top:-6px}
+
+/* Segment & Chips */
+.seg{display:flex;background:var(--surface2);border-radius:999px;padding:4px;margin:0 0 14px}
+.seg button{flex:1;border:0;background:transparent;height:38px;border-radius:999px;font-weight:600;font-size:15px;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -20px 14px;padding:2px 20px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:14px;font-weight:550;white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;font-size:14px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;color:var(--accent);font-weight:600;font-size:14px;padding:8px 0}
+.tag{display:inline-block;font-size:12px;font-weight:550;color:var(--muted);background:var(--surface2);padding:3px 9px;border-radius:999px;margin:6px 4px 0 0}
+
+/* FAB */
+.fab{position:fixed;z-index:12;right:max(20px,calc(50vw - 240px));bottom:calc(22px + var(--safe-b));height:58px;padding:0 22px 0 18px;border-radius:20px;border:0;background:var(--accent);color:var(--on-accent);font-weight:680;font-size:16px;display:flex;align-items:center;gap:8px;box-shadow:0 10px 24px -8px color-mix(in srgb,var(--accent) 70%,transparent)}
+.fab svg{width:24px;height:24px}
+.fab:active{transform:scale(.96)}
+
+/* Leer */
+.empty{text-align:center;padding:48px 16px;color:var(--muted)}
+.empty .big{font-size:48px;margin-bottom:8px}
+.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:4px}
+
+/* Detail */
+.hero{margin:0 -20px 18px;height:260px;position:relative;overflow:hidden;border-radius:0 0 28px 28px;background:var(--surface2)}
+.hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hero-em{width:88px;height:88px;border-radius:26px;background:var(--surface);box-shadow:var(--shadow);display:grid;place-items:center;font-size:48px;margin:8px 0 16px}
+.dhead{display:flex;gap:16px;align-items:flex-start}
+.dhead .main{flex:1;min-width:0}
+.ring{--h:150;--p:0;width:92px;height:92px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient(hsl(var(--h) 52% 44%) calc(var(--p)*1%),var(--surface2) 0)}
+.ring>div{width:76px;height:76px;border-radius:50%;background:var(--bg);display:grid;place-items:center;text-align:center}
+.ring b{font-size:28px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums;color:hsl(var(--h) 60% var(--score-fg-l))}
+.ring.none{background:var(--surface2)}
+.ring.none b{color:var(--muted);font-size:22px}
+.ring small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.panel{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:16px}
+.crit{display:grid;grid-template-columns:minmax(0,1fr) 1.3fr 36px;gap:12px;align-items:center;padding:7px 0;font-size:15px}
+.bar-t{height:10px;border-radius:5px;background:var(--surface2);overflow:hidden}
+.bar-t i{--h:150;display:block;height:100%;border-radius:5px;background:hsl(var(--h) 50% 45%)}
+.crit b{text-align:right;font-variant-numeric:tabular-nums}
+.timeline{position:relative;padding-left:18px}
+.timeline::before{content:"";position:absolute;left:5px;top:10px;bottom:10px;width:2px;background:var(--line);border-radius:2px}
+.ev{position:relative;display:block;width:100%;border:0;text-align:left;background:var(--surface);border-radius:var(--r-md);padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.ev::before{content:"";position:absolute;left:-18px;top:20px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+.ev .top{display:flex;align-items:center;gap:10px}
+.ev .top .d{flex:1;font-weight:650}
+.ev .scores{font-size:13px;color:var(--muted);margin-top:4px}
+.ev p{margin:8px 0 0;white-space:pre-wrap}
+.note-box{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--ink);border-radius:var(--r-md);padding:12px 14px;font-size:14px;margin:14px 0}
+
+/* Formulare */
+.field{margin:0 0 18px}
+.field>label:not(.photo),.flabel{display:block;font-size:14px;font-weight:600;margin:0 0 8px}
+.in{width:100%;min-height:50px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface);padding:12px 14px;font-size:16px}
+.in:focus{outline:none;border-color:var(--accent)}
+textarea.in{min-height:110px;resize:vertical;line-height:1.5}
+.hint{font-size:13px;color:var(--muted);margin-top:6px}
+.emojis{display:flex;flex-wrap:wrap;gap:8px}
+.emojis button{width:48px;height:48px;border-radius:14px;border:1.5px solid transparent;background:var(--surface);font-size:24px;box-shadow:var(--shadow)}
+.emojis button.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--surface))}
+.emojis input{width:96px;height:48px;text-align:center;font-size:22px}
+.crow{display:flex;gap:8px;margin-bottom:8px}
+.crow .in{flex:1}
+.crow .ib{background:var(--surface2);flex:none;width:50px;height:50px;border-radius:var(--r-md)}
+.ghost{width:100%;height:50px;border-radius:var(--r-md);border:1.5px dashed var(--line);background:transparent;font-weight:600;color:var(--muted)}
+.tagbox{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:50px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface);padding:7px 8px}
+.tagbox:focus-within{border-color:var(--accent)}
+.tagbox input{flex:1;min-width:110px;border:0;background:transparent;height:34px;padding:0 6px;font-size:16px}
+.tagbox input:focus{outline:none}
+.tchip{display:inline-flex;align-items:center;gap:2px;height:32px;padding:0 4px 0 12px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:14px;font-weight:550;border:0}
+.tchip span{font-size:18px;width:24px;line-height:1;opacity:.7}
+.sugg{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sugg button{height:30px;padding:0 12px;border-radius:999px;border:1px dashed var(--line);background:transparent;font-size:13px;color:var(--muted)}
+.photo{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;height:168px;border-radius:var(--r-lg);border:1.5px dashed var(--line);background:var(--surface);color:var(--muted);font-weight:600;overflow:hidden;position:relative;cursor:pointer}
+.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.photo svg{width:30px;height:30px}
+.photo .rm{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:18px;display:grid;place-items:center;z-index:2}
+.switch{display:flex;align-items:center;gap:14px;background:var(--surface);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow);cursor:pointer}
+.switch .main{flex:1}
+.switch .main b{display:block;font-weight:620}
+.switch input{appearance:none;width:52px;height:32px;border-radius:16px;background:var(--line);position:relative;flex:none;transition:background .2s;margin:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(20px)}
+
+/* Bewertungsskala */
+.rate{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:14px 14px 16px;margin-bottom:12px}
+.rate .hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.rate .hd span{font-weight:620}
+.rate .hd b{font-size:24px;font-weight:750;font-variant-numeric:tabular-nums;color:var(--muted)}
+.scale{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
+.scale button{--h:150;height:44px;border:0;border-radius:9px;background:var(--surface2);font-size:14px;font-weight:650;color:var(--muted);font-variant-numeric:tabular-nums;padding:0;transition:background .12s,transform .1s}
+.scale button:active{transform:scale(.9)}
+.scale button.f{background:hsl(var(--h) 52% 44%);color:#fff}
+.scale button.cur{box-shadow:0 0 0 2px var(--surface),0 0 0 4px hsl(var(--h) 52% 44%)}
+.totalcard{display:flex;align-items:center;gap:16px;margin:4px 0 20px}
+.totalcard .main b{display:block;font-size:17px}
+
+/* Untere Aktionsleiste */
+.actions{position:fixed;z-index:12;left:0;right:0;bottom:0;padding:12px 20px calc(12px + var(--safe-b));background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.actions .in-w{max-width:480px;margin:0 auto;display:flex;gap:10px}
+.btn{flex:1;height:54px;border-radius:18px;border:0;background:var(--accent);color:var(--on-accent);font-weight:680;font-size:16px}
+.btn:active{transform:scale(.98)}
+.btn.sec{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.btn.inline{width:100%;flex:none;display:flex;align-items:center;justify-content:center;gap:8px;margin:18px 0 0}
+.btn.inline svg{width:22px;height:22px}
+.dangerlink{display:block;width:100%;border:0;background:transparent;color:var(--danger);font-weight:600;padding:16px;margin-top:8px}
+
+/* Backup */
+.set{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
+.set b{display:block;font-size:17px;margin-bottom:2px}
+.set .btn{width:100%;margin-top:14px;flex:none;display:flex;align-items:center;justify-content:center}
+
+/* Toast & Sheet */
+.toast{position:fixed;z-index:40;left:50%;bottom:calc(96px + var(--safe-b));transform:translateX(-50%);width:min(440px,calc(100% - 32px));display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--bg);padding:12px 12px 12px 18px;border-radius:16px;font-size:15px;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);animation:toastIn .22s ease-out}
+.toast span{flex:1}
+.toast button{border:0;background:transparent;color:var(--accent);font-weight:700;padding:6px 8px;filter:brightness(1.3)}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+.sheet-bg{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;animation:fade .2s}
+.sheet{width:100%;max-width:520px;background:var(--bg);border-radius:26px 26px 0 0;padding:10px 20px calc(20px + var(--safe-b));animation:up .26s cubic-bezier(.2,.8,.2,1)}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 14px}
+.sheet h3{margin:0 0 6px;font-size:20px}
+.sheet p{margin:0 0 18px;color:var(--muted)}
+.sheet .row{display:flex;gap:10px}
+.sheet .opt{display:flex;width:100%;align-items:center;gap:12px;border:0;background:transparent;padding:14px 4px;font-size:16px;font-weight:550;border-radius:12px}
+.sheet .opt.on{color:var(--accent);font-weight:700}
+@keyframes fade{from{opacity:0}}
+@keyframes up{from{transform:translateY(100%)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar" id="bar">
+    <button class="ib" id="backBtn" aria-label="Zurück" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="t" id="barTitle"></div>
+    <span id="barActions"></span>
+  </div>
+  <main id="view"><div class="empty">Lädt …</div></main>
+</div>
+<div id="layer"></div>
+
+<script>
+/* ---------- Icons ---------- */
+const I={
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',
+  save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  sort:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>',
+};
+
+/* ---------- Daten ---------- */
+const KEY='geschmackstagebuch-v1';
+const uid=()=>Math.random().toString(36).slice(2,10);
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10);};
+let mem=null;
+
+function seed(){
+  const tea={id:uid(),name:'Grüne Tees',emoji:'🍵',criteria:['Geschmack','Bitterkeit (wenig = gut)','Aroma','Preis/Leistung']};
+  const ely={id:uid(),name:'Elektrolyt-Sorten',emoji:'💧',criteria:['Geschmack','Süße','Verträglichkeit','Löslichkeit']};
+  const e=(cat,name,brand,tags,status)=>({id:uid(),catId:cat.id,name,brand,tags,status,photo:null,created:today()});
+  const s1=e(tea,'Sencha Fukamushi','Teehaus Kyoto',['Japan','lose'],'tested');
+  const s2=e(tea,'Gyokuro','Teehaus Kyoto',['Japan','teuer'],'tested');
+  const s3=e(tea,'Jasmin Pearls','Asia Tee',['China','Blüten'],'tested');
+  const s5=e(tea,'Bancha','Bio-Laden',['Japan','günstig'],'tested');
+  const s4=e(tea,'Matcha Ceremonial','Uji Garden',['Japan','Pulver'],'wish');
+  const l1=e(ely,'Zitrone','HydroMax',['Tabs'],'tested');
+  const l2=e(ely,'Wassermelone','SaltyBoost',['Pulver','zuckerfrei'],'tested');
+  const l3=e(ely,'Mango-Maracuja','HydroMax',['Tabs'],'wish');
+  const t=(en,d,scores,comment)=>({id:uid(),entryId:en.id,date:d,scores,comment});
+  return {categories:[tea,ely],entries:[s1,s2,s3,s5,s4,l1,l2,l3],tests:[
+    t(s1,'2026-10-02',[8,7,8,8],'Kräftig, grasig, schön dunkelgrün im Aufguss.'),
+    t(s1,'2026-11-05',[9,8,8,8],'Mit 70 °C statt 80 °C deutlich besser.'),
+    t(s2,'2026-10-20',[9,9,10,5],'Unglaublich umami, aber teuer.'),
+    t(s3,'2026-09-14',[7,8,9,7],'Sehr blumig, eher für nachmittags.'),
+    t(s5,'2026-09-30',[5,4,4,9],'Okay für jeden Tag, aber flach.'),
+    t(l1,'2026-08-03',[7,6,9,8],'Etwas künstlich, aber gut verträglich.'),
+    t(l2,'2026-08-21',[8,7,8,6],'Lecker, löst sich langsam auf.')]};
+}
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('geschmackstagebuch',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function idbGet(){const db=await idb();return new Promise((res,rej)=>{const q=db.transaction('kv').objectStore('kv').get(KEY);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function idbPut(v){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,KEY);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
+const empty=()=>({categories:[],entries:[],tests:[]});
+async function init(){
+  try{mem=await idbGet();}catch(e){}
+  if(!mem){try{const raw=localStorage.getItem(KEY);if(raw)mem=JSON.parse(raw);}catch(e){}}
+  if(!mem) mem=empty();
+  try{navigator.storage?.persist?.();}catch(e){}
+  render();
+}
+function save(){
+  mem.lastChange=new Date().toISOString();
+  idbPut(mem).catch(()=>{try{localStorage.setItem(KEY,JSON.stringify(mem));}catch(e){toast('Speichern fehlgeschlagen. Bitte ein Backup erstellen.');}});
+}
+const D=()=>mem;
+
+/* ---------- Berechnung & Format ---------- */
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+const testScore=t=>avg(t.scores.filter(v=>v!=null));
+const testsOf=id=>D().tests.filter(t=>t.entryId===id).sort((a,b)=>b.date.localeCompare(a.date));
+const entryScore=id=>avg(testsOf(id).map(testScore).filter(v=>v!=null));
+const fmt=v=>v==null?'–':(Math.round(v*10)/10).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate=d=>new Date(d+'T12:00').toLocaleDateString('de-DE',{day:'numeric',month:'short',year:'numeric'});
+const cat=id=>D().categories.find(c=>c.id===id);
+const entry=id=>D().entries.find(e=>e.id===id);
+/* Farbton nach Note: 1 = rot, 5–6 = bernstein, 10 = grün */
+const hue=v=>v==null?0:Math.round(v<=5.5?6+(v-1)/4.5*34:40+(v-5.5)/4.5*112);
+const badge=(v,cls='')=>`<span class="sc ${cls} ${v==null?'none':''}" style="--h:${hue(v)}">${fmt(v)}</span>`;
+const initial=n=>esc((n||'?').trim().charAt(0).toUpperCase());
+const buzz=()=>{try{navigator.vibrate?.(8);}catch(e){}};
+
+/* ---------- Navigation ---------- */
+let stack=[{v:'home'}];
+let ui={tab:'rank',q:'',tag:null,sort:'score',hq:''};
+const $view=document.getElementById('view'),$layer=document.getElementById('layer'),$bar=document.getElementById('bar');
+function go(state){stack[stack.length-1].y=scrollY;stack.push(state);render('push');scrollTo(0,0);}
+function back(){if(stack.length>1){stack.pop();const y=stack[stack.length-1].y||0;render('pop');scrollTo(0,y);}}
+function reset(){stack=[{v:'home'}];render('pop');scrollTo(0,0);}
+document.getElementById('backBtn').onclick=back;
+addEventListener('scroll',()=>$bar.classList.toggle('scrolled',scrollY>40),{passive:true});
+addEventListener('keydown',e=>{if(e.key==='Escape'){if($layer.innerHTML)closeSheet();else back();}});
+
+function bar(title,actions=''){
+  document.getElementById('barTitle').textContent=title;
+  document.getElementById('backBtn').hidden=stack.length<=1;
+  document.getElementById('barActions').innerHTML=actions;
+}
+function toast(msg,action){
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');
+  t.innerHTML=`<span>${esc(msg)}</span>${action?`<button>${esc(action.label)}</button>`:''}`;
+  if(action) t.querySelector('button').onclick=()=>{t.remove();action.fn();};
+  document.body.appendChild(t);setTimeout(()=>t.remove(),action?6000:2400);
+}
+function undoable(msg,fn){
+  const snap=JSON.stringify(mem);fn();save();buzz();
+  toast(msg,{label:'Rückgängig',fn:()=>{mem=JSON.parse(snap);save();render();}});
+}
+function sheet(html,mount){
+  $layer.innerHTML=`<div class="sheet-bg"><div class="sheet" role="dialog"><div class="grab"></div>${html}</div></div>`;
+  const bg=$layer.firstChild;bg.onclick=e=>{if(e.target===bg)closeSheet();};mount&&mount(bg.firstChild);
+}
+function closeSheet(){$layer.innerHTML='';}
+function ask(title,text,okLabel,onOk){
+  sheet(`<h3>${esc(title)}</h3><p>${esc(text)}</p><div class="row"><button class="btn sec" id="sNo">Abbrechen</button><button class="btn" style="background:var(--danger);color:#fff" id="sYes">${esc(okLabel)}</button></div>`,s=>{
+    s.querySelector('#sNo').onclick=closeSheet;s.querySelector('#sYes').onclick=()=>{closeSheet();onOk();};
+  });
+}
+function actionBar(html){const d=document.createElement('div');d.className='actions';d.innerHTML=`<div class="in-w">${html}</div>`;$view.appendChild(d);return d;}
+function fab(label,onclick){const b=document.createElement('button');b.className='fab';b.innerHTML=I.plus+esc(label);b.onclick=onclick;$view.appendChild(b);}
+
+function render(dir){
+  const s=stack[stack.length-1];
+  document.querySelector('.app').className='app '+(dir||'');
+  $bar.classList.toggle('scrolled',false);
+  ({home:vHome,cat:vCat,entry:vEntry,catForm:vCatForm,entryForm:vEntryForm,testForm:vTestForm,backup:vBackup})[s.v](s);
+}
+
+/* ---------- Startseite ---------- */
+function vHome(){
+  bar('Geschmackstagebuch',`<button class="ib" id="bk" aria-label="Backup">${I.save}</button>`);
+  document.getElementById('bk').onclick=()=>go({v:'backup'});
+  const cats=D().categories;
+  let h=`<div class="screen"><h1 class="lt">Geschmacks&shy;tagebuch</h1>`;
+  if(!cats.length){
+    h+=`<div class="empty"><div class="big">🍵</div><b>Was willst du als Erstes bewerten?</b>Leg eine Kategorie an, z. B. „Grüne Tees", und bestimme, worauf du achtest.<br><br><button class="btn sec" id="ex" style="width:auto;padding:0 20px;height:46px">Mit Beispieldaten ausprobieren</button></div></div>`;
+    $view.innerHTML=h;document.getElementById('ex').onclick=()=>{mem=seed();save();render();};
+    fab('Kategorie',()=>go({v:'catForm'}));return;
+  }
+  const n=D().tests.length;
+  h+=`<p class="lead">${cats.length} ${cats.length===1?'Kategorie':'Kategorien'}, ${n} ${n===1?'Test':'Tests'}</p>`;
+  h+=`<div class="search">${I.search}<input id="hq" type="search" placeholder="Alles durchsuchen" value="${esc(ui.hq)}" autocomplete="off"></div><div id="hres"></div>`;
+  const lb=lastBackup(),lc=D().lastChange;
+  if(lc&&(!lb||lc>lb)){const days=lb?Math.floor((Date.now()-new Date(lb))/864e5):null;
+    if(days===null||days>=14) h+=`<button class="note-box" id="bkh" style="border:0;width:100%;text-align:left">💾 ${days===null?'Du hast noch kein Backup.':`Dein letztes Backup ist ${days} Tage alt.`} <b style="color:var(--accent)">Jetzt sichern</b></button>`;}
+  h+=`<div class="grid" id="tiles">`;
+  cats.forEach(c=>{
+    const es=D().entries.filter(e=>e.catId===c.id);const tested=es.filter(e=>e.status==='tested');
+    const best=tested.map(e=>({e,s:entryScore(e.id)})).filter(x=>x.s!=null).sort((a,b)=>b.s-a.s)[0];
+    const w=es.length-tested.length;
+    h+=`<button class="tile" data-c="${c.id}"><span class="em">${esc(c.emoji||'⭐')}</span><span class="nm">${esc(c.name)}</span>
+      <span class="ct">${tested.length} getestet${w?`, ${w} gemerkt`:''}</span>
+      ${best?`<span class="best"><span>🏆 ${esc(best.e.name)}</span>${badge(best.s)}</span>`:''}</button>`;
+  });
+  h+=`<button class="tile add" id="addc"><span class="em">${I.plus.replace('<svg','<svg width="28" height="28"')}</span>Neue Kategorie</button></div></div>`;
+  $view.innerHTML=h;
+  $view.querySelectorAll('[data-c]').forEach(el=>el.onclick=()=>{ui={...ui,tab:'rank',q:'',tag:null};go({v:'cat',id:el.dataset.c});});
+  document.getElementById('addc').onclick=()=>go({v:'catForm'});
+  const bkh=document.getElementById('bkh');if(bkh)bkh.onclick=()=>go({v:'backup'});
+  const hq=document.getElementById('hq');
+  const drawRes=()=>{
+    const q=ui.hq.trim().toLowerCase();const box=document.getElementById('hres');const tiles=document.getElementById('tiles');
+    if(!q){box.innerHTML='';tiles.hidden=false;return;}
+    tiles.hidden=true;
+    const r=D().entries.filter(e=>matches(e,q)).map(e=>({e,s:entryScore(e.id)})).sort((a,b)=>(b.s??-1)-(a.s??-1));
+    box.innerHTML=r.length?`<div class="list">${r.map(x=>row(x.e,x.s,{showCat:true})).join('')}</div>`:`<div class="empty"><b>Nichts gefunden</b>Versuch es mit einem anderen Begriff.</div>`;
+    box.querySelectorAll('[data-e]').forEach(el=>el.onclick=()=>go({v:'entry',id:el.dataset.e}));
+  };
+  hq.oninput=()=>{ui.hq=hq.value;drawRes();};drawRes();
+}
+function matches(e,q){return (e.name+' '+e.brand+' '+e.tags.join(' ')+' '+testsOf(e.id).map(t=>t.comment).join(' ')).toLowerCase().includes(q);}
+function row(e,s,o={}){
+  const n=testsOf(e.id).length;const c=cat(e.catId);
+  const sub=[o.showCat?`${c.emoji||''} ${c.name}`:null,e.brand||null,n?`${n} ${n===1?'Test':'Tests'}`:(e.status==='wish'?'noch nicht getestet':null)].filter(Boolean).join(', ');
+  const av=e.photo?`<img class="av" src="${e.photo}" alt="">`:`<span class="av">${initial(e.name)}</span>`;
+  return `<button class="li ${o.rank===1?'top':''}" data-e="${e.id}"><span class="av-wrap">${av}${o.rank?`<span class="rk">${o.rank}</span>`:''}</span>
+    <span class="main"><span class="nm" style="display:block">${esc(e.name)}</span><span class="sub" style="display:block">${esc(sub)}</span></span>
+    ${e.status==='wish'&&!n?'':badge(s)}</button>`;
+}
+
+/* ---------- Kategorie ---------- */
+const SORTS={score:'Beste zuerst',recent:'Zuletzt getestet',name:'Name A–Z'};
+function vCat(s){
+  const c=cat(s.id);if(!c){reset();return;}
+  bar(c.name,`<button class="ib" id="ed" aria-label="Kategorie bearbeiten">${I.edit}</button>`);
+  document.getElementById('ed').onclick=()=>go({v:'catForm',id:c.id});
+  const all=D().entries.filter(e=>e.catId===c.id);
+  const tags=[...new Set(all.flatMap(e=>e.tags))].sort((a,b)=>a.localeCompare(b,'de'));
+  const nT=all.filter(e=>e.status==='tested').length,nW=all.length-nT;
+  let h=`<div class="screen"><h1 class="lt">${esc(c.emoji||'')} ${esc(c.name)}</h1><p class="lead">Bewertet nach ${esc(c.criteria.map(x=>x.split(' (')[0]).join(', '))}</p>
+  <div class="seg" role="tablist"><button data-t="rank" class="${ui.tab==='rank'?'on':''}">Ranking ${nT}</button><button data-t="wish" class="${ui.tab==='wish'?'on':''}">Merkliste ${nW}</button></div>`;
+  if(all.length>3) h+=`<div class="search">${I.search}<input id="q" type="search" placeholder="In ${esc(c.name)} suchen" value="${esc(ui.q)}" autocomplete="off"></div>`;
+  if(tags.length) h+=`<div class="chips">${tags.map(t=>`<button class="chip ${ui.tag===t?'on':''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
+  h+=`<div id="list"></div></div>`;
+  $view.innerHTML=h;
+  const draw=()=>{
+    let list=all.filter(e=>ui.tab==='rank'?e.status==='tested':e.status==='wish');
+    const q=ui.q.trim().toLowerCase();if(q)list=list.filter(e=>matches(e,q));
+    if(ui.tag)list=list.filter(e=>e.tags.includes(ui.tag));
+    list=list.map(e=>({e,s:entryScore(e.id),d:testsOf(e.id)[0]?.date||''}));
+    if(ui.tab==='wish'||ui.sort==='name')list.sort((a,b)=>a.e.name.localeCompare(b.e.name,'de'));
+    else if(ui.sort==='recent')list.sort((a,b)=>b.d.localeCompare(a.d));
+    else list.sort((a,b)=>(b.s??-1)-(a.s??-1));
+    const box=document.getElementById('list');
+    if(!list.length){
+      box.innerHTML=(q||ui.tag)?`<div class="empty"><b>Keine Treffer</b>Ändere die Suche oder den Filter.</div>`:
+        ui.tab==='rank'?`<div class="empty"><div class="big">${esc(c.emoji||'⭐')}</div><b>Noch nichts bewertet</b>Füge deinen ersten Eintrag hinzu und bewerte ihn direkt.</div>`:
+        `<div class="empty"><div class="big">📝</div><b>Merkliste ist leer</b>Merk dir hier, was du noch probieren willst.</div>`;
+      return;
+    }
+    const ranked=ui.tab==='rank'&&ui.sort==='score'&&!q&&!ui.tag;
+    box.innerHTML=(ui.tab==='rank'?`<div class="toolbar"><span>${list.length} ${list.length===1?'Eintrag':'Einträge'}</span><button class="linkbtn" id="so">${SORTS[ui.sort]}</button></div>`:'')+
+      `<div class="list">${list.map((x,i)=>row(x.e,x.s,{rank:ranked&&x.s!=null?i+1:0})).join('')}</div>`;
+    box.querySelectorAll('[data-e]').forEach(el=>el.onclick=()=>go({v:'entry',id:el.dataset.e}));
+    const so=document.getElementById('so');if(so)so.onclick=()=>sheet(`<h3>Sortieren</h3>${Object.entries(SORTS).map(([k,l])=>`<button class="opt ${ui.sort===k?'on':''}" data-s="${k}">${ui.sort===k?'✓ ':''}${l}</button>`).join('')}`,sh=>sh.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{ui.sort=b.dataset.s;closeSheet();draw();}));
+  };
+  $view.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.t;$view.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));draw();});
+  $view.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{ui.tag=ui.tag===b.dataset.tag?null:b.dataset.tag;$view.querySelectorAll('[data-tag]').forEach(x=>x.classList.toggle('on',x.dataset.tag===ui.tag));draw();});
+  const qi=document.getElementById('q');if(qi)qi.oninput=()=>{ui.q=qi.value;draw();};
+  draw();
+  fab(ui.tab==='wish'?'Merken':'Eintrag',()=>go({v:'entryForm',catId:c.id,wish:ui.tab==='wish'}));
+}
+
+/* ---------- Eintrag ---------- */
+function vEntry(s){
+  const e=entry(s.id);if(!e){back();return;}
+  const c=cat(e.catId),ts=testsOf(e.id),sc=entryScore(e.id);
+  bar(e.name,`<button class="ib" id="ed" aria-label="Eintrag bearbeiten">${I.edit}</button>`);
+  document.getElementById('ed').onclick=()=>go({v:'entryForm',id:e.id});
+  let h=`<div class="screen">`;
+  h+=e.photo?`<div class="hero"><img src="${e.photo}" alt="${esc(e.name)}"></div>`:`<div class="hero-em">${esc(c.emoji||'⭐')}</div>`;
+  h+=`<div class="dhead"><div class="main"><h1 class="lt" style="margin-top:0">${esc(e.name)}</h1>
+    <div class="muted">${[e.brand,c.name].filter(Boolean).map(esc).join(' in ')}</div>
+    <div>${e.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></div>
+    <div class="ring ${sc==null?'none':''}" style="--h:${hue(sc)};--p:${(sc||0)*10}"><div><span><b>${fmt(sc)}</b><small>${ts.length?(ts.length===1?'1 Test':`Ø ${ts.length} Tests`):'offen'}</small></span></div></div></div>`;
+  if(e.status==='wish'&&!ts.length) h+=`<div class="note-box">Steht auf deiner Merkliste. Sobald du es bewertest, erscheint es im Ranking.</div>`;
+  h+=`<button class="btn inline" id="nt">${I.plus}${ts.length?'Erneut bewerten':'Jetzt bewerten'}</button>`;
+  if(ts.length){
+    h+=`<h2 class="sh">Kriterien im Schnitt</h2><div class="panel">`;
+    c.criteria.forEach((cr,i)=>{const v=avg(ts.map(t=>t.scores[i]).filter(x=>x!=null));
+      h+=`<div class="crit"><span>${esc(cr)}</span><div class="bar-t"><i style="width:${(v||0)*10}%;--h:${hue(v)}"></i></div><b>${fmt(v)}</b></div>`;});
+    h+=`</div><h2 class="sh">Verlauf</h2><div class="timeline">`;
+    ts.forEach(t=>{h+=`<button class="ev" data-t="${t.id}"><div class="top"><span class="d">${fmtDate(t.date)}</span>${badge(testScore(t))}</div>
+      <div class="scores">${c.criteria.map((cr,i)=>`${esc(cr.split(' (')[0])} ${t.scores[i]??'–'}`).join(', ')}</div>
+      ${t.comment?`<p>${esc(t.comment)}</p>`:''}</button>`;});
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+  $view.innerHTML=h;
+  document.getElementById('nt').onclick=()=>go({v:'testForm',entryId:e.id});
+  $view.querySelectorAll('[data-t]').forEach(el=>el.onclick=()=>go({v:'testForm',entryId:e.id,id:el.dataset.t}));
+}
+
+/* ---------- Kategorie-Formular ---------- */
+const EMOJIS=['🍵','☕','💧','🥤','🍫','🧀','🍷','🍺','🍎','🌶️','🍜','🍦','🍪','🧃','🫖','⭐'];
+function vCatForm(s){
+  const c=s.id?cat(s.id):null;
+  bar(c?'Kategorie bearbeiten':'Neue Kategorie');
+  if(!s.init){s.init=1;s.name=c?.name||'';s.emoji=c?.emoji||'🍵';s.crits=c?[...c.criteria]:['Geschmack','Preis/Leistung'];}
+  const fixedN=c?c.criteria.length:0;
+  const draw=()=>{
+    $view.innerHTML=`<div class="screen"><h1 class="lt">${c?'Kategorie bearbeiten':'Neue Kategorie'}</h1><p class="lead">${c?'Änderungen gelten für alle Einträge dieser Kategorie.':'Leg fest, was du sammelst und worauf du achtest.'}</p>
+    <div class="field"><label for="n">Name</label><input class="in" id="n" value="${esc(s.name)}" placeholder="z. B. Grüne Tees" autocomplete="off"></div>
+    <div class="field"><span class="flabel">Symbol</span><div class="emojis">${EMOJIS.map(x=>`<button data-em="${x}" class="${s.emoji===x?'on':''}" aria-label="${x}">${x}</button>`).join('')}<input class="in" id="em" value="${EMOJIS.includes(s.emoji)?'':esc(s.emoji)}" placeholder="eigenes" maxlength="4" aria-label="Eigenes Emoji"></div></div>
+    <div class="field"><span class="flabel">Bewertungskriterien</span>
+    ${s.crits.map((cr,i)=>`<div class="crow"><input class="in" data-i="${i}" value="${esc(cr)}" placeholder="z. B. Aroma" aria-label="Kriterium ${i+1}">${i>=fixedN?`<button class="ib" data-del="${i}" aria-label="Kriterium entfernen">${I.x}</button>`:''}</div>`).join('')}
+    <button class="ghost" id="add">+ Kriterium hinzufügen</button>
+    <div class="hint">Jedes Kriterium bewertest du von 1 bis 10. Die Gesamtnote ist der Durchschnitt.${c?' Bestehende Kriterien kannst du umbenennen, aber nicht entfernen, damit alte Tests stimmen.':''}</div></div>
+    ${c?`<button class="dangerlink" id="dl">Kategorie löschen</button>`:''}</div>`;
+    const keep=()=>{s.name=document.getElementById('n').value;const own=document.getElementById('em').value.trim();if(own)s.emoji=own;$view.querySelectorAll('[data-i]').forEach(inp=>s.crits[+inp.dataset.i]=inp.value);};
+    $view.querySelectorAll('[data-em]').forEach(b=>b.onclick=()=>{keep();s.emoji=b.dataset.em;document.getElementById('em').value='';$view.querySelectorAll('[data-em]').forEach(x=>x.classList.toggle('on',x===b));});
+    document.getElementById('em').oninput=ev=>{if(ev.target.value.trim()){s.emoji=ev.target.value.trim();$view.querySelectorAll('[data-em]').forEach(x=>x.classList.remove('on'));}};
+    document.getElementById('add').onclick=()=>{keep();s.crits.push('');draw();const l=$view.querySelectorAll('[data-i]');l[l.length-1].focus();};
+    $view.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{keep();s.crits.splice(+b.dataset.del,1);draw();});
+    if(c)document.getElementById('dl').onclick=()=>{
+      const n=D().entries.filter(e=>e.catId===c.id).length;
+      ask(`„${c.name}" löschen?`,`Damit werden auch ${n} ${n===1?'Eintrag':'Einträge'} und alle Tests gelöscht.`,'Löschen',()=>undoable(`„${c.name}" gelöscht`,()=>{
+        const d=D();const ids=d.entries.filter(e=>e.catId===c.id).map(e=>e.id);
+        d.tests=d.tests.filter(t=>!ids.includes(t.entryId));d.entries=d.entries.filter(e=>e.catId!==c.id);d.categories=d.categories.filter(x=>x.id!==c.id);reset();}));
+    };
+    actionBar(`<button class="btn" id="sv">${c?'Änderungen speichern':'Kategorie anlegen'}</button>`).querySelector('#sv').onclick=()=>{
+      keep();const name=s.name.trim();const cl=s.crits.map(x=>x.trim());
+      if(!name){toast('Gib der Kategorie einen Namen.');document.getElementById('n').focus();return;}
+      if(c){
+        c.name=name;c.emoji=s.emoji;c.criteria=[...cl.slice(0,fixedN).map((x,i)=>x||c.criteria[i]),...cl.slice(fixedN).filter(Boolean)];
+        save();toast('Änderungen gespeichert');back();
+      }else{
+        if(!cl.filter(Boolean).length){toast('Füge mindestens ein Kriterium hinzu.');return;}
+        const nc={id:uid(),name,emoji:s.emoji,criteria:cl.filter(Boolean)};D().categories.push(nc);save();
+        stack.pop();ui={...ui,tab:'rank',q:'',tag:null};go({v:'cat',id:nc.id});toast('Kategorie angelegt');
+      }
+    };
+  };
+  draw();
+}
+
+/* ---------- Eintrag-Formular ---------- */
+function shrink(file,cb){
+  const r=new FileReader();
+  r.onload=()=>{const img=new Image();img.onload=()=>{
+    const m=900,k=Math.min(1,m/Math.max(img.width,img.height));
+    const cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);cb(cv.toDataURL('image/jpeg',.78));
+  };img.onerror=()=>toast('Das Bild konnte nicht gelesen werden.');img.src=r.result;};
+  r.readAsDataURL(file);
+}
+function vEntryForm(s){
+  const e=s.id?entry(s.id):null;const catId=e?e.catId:s.catId;const c=cat(catId);
+  bar(e?'Eintrag bearbeiten':'Neuer Eintrag');
+  if(!s.init){s.init=1;s.photo=e?.photo||null;s.tags=e?[...e.tags]:[];s.wish=e?e.status==='wish':!!s.wish;}
+  const catTags=[...new Set(D().entries.filter(x=>x.catId===catId).flatMap(x=>x.tags))];
+  const canWish=!e||!testsOf(e.id).length;
+  $view.innerHTML=`<div class="screen"><h1 class="lt">${e?'Eintrag bearbeiten':'Neuer Eintrag'}</h1><p class="lead">in ${esc(c.emoji||'')} ${esc(c.name)}</p>
+  <div class="field"><label class="photo" id="ph"><input type="file" accept="image/*" id="phf" hidden></label></div>
+  <div class="field"><label for="n">Name</label><input class="in" id="n" value="${esc(e?.name||'')}" placeholder="z. B. Sencha Fukamushi" autocomplete="off"></div>
+  <div class="field"><label for="b">Marke oder Hersteller</label><input class="in" id="b" value="${esc(e?.brand||'')}" placeholder="optional" autocomplete="off"></div>
+  <div class="field"><label for="ti">Tags</label><div class="tagbox" id="tb"></div><div class="sugg" id="sg"></div></div>
+  ${canWish?`<label class="switch"><span class="main"><b>Auf die Merkliste</b><span class="small muted">Noch nicht probiert, später bewerten</span></span><input type="checkbox" id="w" ${s.wish?'checked':''}></label>`:''}
+  ${e?`<button class="dangerlink" id="dl">Eintrag löschen</button>`:''}</div>`;
+  const drawPhoto=()=>{
+    const ph=document.getElementById('ph');ph.querySelectorAll(':not(#phf)').forEach(x=>x.remove());
+    if(s.photo){ph.insertAdjacentHTML('beforeend',`<img src="${s.photo}" alt=""><button class="rm" type="button" aria-label="Foto entfernen">${I.x.replace('<svg','<svg width="18" height="18"')}</button>`);
+      ph.querySelector('.rm').onclick=ev=>{ev.preventDefault();ev.stopPropagation();s.photo=null;drawPhoto();};}
+    else ph.insertAdjacentHTML('beforeend',`${I.cam}<span>Foto hinzufügen</span>`);
+  };
+  drawPhoto();
+  document.getElementById('phf').onchange=ev=>{const f=ev.target.files[0];if(f)shrink(f,d=>{s.photo=d;drawPhoto();});ev.target.value='';};
+  const drawTags=()=>{
+    const tb=document.getElementById('tb');const val=document.getElementById('ti')?.value||'';
+    tb.innerHTML=s.tags.map((t,i)=>`<button class="tchip" type="button" data-rt="${i}" aria-label="Tag ${esc(t)} entfernen">${esc(t)}<span>×</span></button>`).join('')+`<input id="ti" placeholder="${s.tags.length?'':'z. B. Japan, lose'}" value="${esc(val)}" autocomplete="off" enterkeyhint="done">`;
+    tb.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{s.tags.splice(+b.dataset.rt,1);drawTags();});
+    const ti=document.getElementById('ti');
+    ti.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===','){ev.preventDefault();addTag(ti.value);}else if(ev.key==='Backspace'&&!ti.value&&s.tags.length){s.tags.pop();drawTags();document.getElementById('ti').focus();}};
+    ti.oninput=()=>{if(ti.value.includes(',')){ti.value.split(',').slice(0,-1).forEach(x=>pushTag(x));ti.value=ti.value.split(',').pop();drawTags();document.getElementById('ti').focus();}};
+    const sg=catTags.filter(t=>!s.tags.includes(t));
+    document.getElementById('sg').innerHTML=sg.map(t=>`<button type="button" data-at="${esc(t)}">+ ${esc(t)}</button>`).join('');
+    document.querySelectorAll('[data-at]').forEach(b=>b.onclick=()=>{pushTag(b.dataset.at);drawTags();});
+  };
+  const pushTag=t=>{t=t.trim();if(t&&!s.tags.includes(t))s.tags.push(t);};
+  const addTag=t=>{pushTag(t);document.getElementById('ti').value='';drawTags();document.getElementById('ti').focus();};
+  drawTags();
+  const w=document.getElementById('w');
+  const ab=actionBar(`<button class="btn" id="sv"></button>`);const sv=ab.querySelector('#sv');
+  const label=()=>sv.textContent=e?'Änderungen speichern':(w&&w.checked?'Auf Merkliste setzen':'Weiter zur Bewertung');
+  label();if(w)w.onchange=label;
+  sv.onclick=()=>{
+    const name=document.getElementById('n').value.trim();if(!name){toast('Gib dem Eintrag einen Namen.');document.getElementById('n').focus();return;}
+    pushTag(document.getElementById('ti').value);
+    const brand=document.getElementById('b').value.trim();const wish=w?w.checked:false;
+    if(e){Object.assign(e,{name,brand,tags:[...s.tags],photo:s.photo});if(w)e.status=wish?'wish':'tested';save();toast('Änderungen gespeichert');back();return;}
+    const ne={id:uid(),catId,name,brand,tags:[...s.tags],photo:s.photo,status:wish?'wish':'tested',created:today()};
+    D().entries.push(ne);save();stack.pop();
+    if(wish){ui.tab='wish';render('pop');toast(`„${name}" gemerkt`);}
+    else{stack.push({v:'entry',id:ne.id});go({v:'testForm',entryId:ne.id});}
+  };
+  if(e)document.getElementById('dl').onclick=()=>{const n=testsOf(e.id).length;
+    const doDel=()=>undoable(`„${e.name}" gelöscht`,()=>{const d=D();d.tests=d.tests.filter(t=>t.entryId!==e.id);d.entries=d.entries.filter(x=>x.id!==e.id);stack.pop();stack.pop();render('pop');});
+    n?ask(`„${e.name}" löschen?`,`Auch ${n} ${n===1?'Test wird':'Tests werden'} gelöscht.`,'Löschen',doDel):doDel();};
+}
+
+/* ---------- Test-Formular ---------- */
+function vTestForm(s){
+  const e=entry(s.entryId);const c=cat(e.catId);const t=s.id?D().tests.find(x=>x.id===s.id):null;
+  bar(t?'Test bearbeiten':'Bewerten');
+  if(!s.init){s.init=1;s.sc=c.criteria.map((_,i)=>t?.scores[i]??null);}
+  const sc=s.sc;
+  $view.innerHTML=`<div class="screen"><h1 class="lt">${esc(e.name)}</h1><p class="lead">${t?'Test bearbeiten':'Wie war es diesmal?'}</p>
+  <div class="totalcard"><div class="ring" id="ring"><div><span><b id="tot"></b><small>Gesamt</small></span></div></div><div class="main"><b id="totl"></b><span class="small muted">Durchschnitt aller bewerteten Kriterien</span></div></div>
+  ${c.criteria.map((cr,i)=>`<div class="rate"><div class="hd"><span>${esc(cr)}</span><b id="v${i}">–</b></div><div class="scale" role="radiogroup" aria-label="${esc(cr)}">${[1,2,3,4,5,6,7,8,9,10].map(v=>`<button data-i="${i}" data-v="${v}" role="radio" aria-label="${v}">${v}</button>`).join('')}</div></div>`).join('')}
+  <div class="field" style="margin-top:20px"><label for="cm">Notiz</label><textarea class="in" id="cm" placeholder="Zubereitung, Eindruck, was dir aufgefallen ist">${esc(t?.comment||'')}</textarea></div>
+  <div class="field"><label for="d">Datum</label><input class="in" type="date" id="d" value="${t?.date||today()}" max="${today()}"></div>
+  ${t?`<button class="dangerlink" id="dl">Test löschen</button>`:''}</div>`;
+  const paint=()=>{
+    c.criteria.forEach((_,i)=>{const v=sc[i];const vb=document.getElementById('v'+i);vb.textContent=v??'–';vb.style.color=v?`hsl(${hue(v)} 60% var(--score-fg-l))`:'';
+      $view.querySelectorAll(`[data-i="${i}"]`).forEach(b=>{const bv=+b.dataset.v;b.style.setProperty('--h',hue(v));b.classList.toggle('f',v!=null&&bv<=v);b.classList.toggle('cur',bv===v);b.setAttribute('aria-checked',bv===v);});});
+    const a=avg(sc.filter(x=>x!=null));const ring=document.getElementById('ring');
+    ring.classList.toggle('none',a==null);ring.style.setProperty('--h',hue(a));ring.style.setProperty('--p',(a||0)*10);
+    document.getElementById('tot').textContent=fmt(a);
+    const done=sc.filter(x=>x!=null).length;
+    document.getElementById('totl').textContent=done===sc.length?'Alles bewertet':`${done} von ${sc.length} bewertet`;
+  };
+  $view.querySelectorAll('.scale button').forEach(b=>b.onclick=()=>{const i=+b.dataset.i,v=+b.dataset.v;sc[i]=sc[i]===v?null:v;buzz();paint();});
+  paint();
+  actionBar(`<button class="btn" id="sv">${t?'Änderungen speichern':'Bewertung speichern'}</button>`).querySelector('#sv').onclick=()=>{
+    if(!sc.some(x=>x!=null)){toast('Bewerte mindestens ein Kriterium.');return;}
+    const date=document.getElementById('d').value||today();const comment=document.getElementById('cm').value.trim();
+    if(t)Object.assign(t,{date,comment,scores:[...sc]});else D().tests.push({id:uid(),entryId:e.id,date,comment,scores:[...sc]});
+    e.status='tested';save();buzz();toast(t?'Änderungen gespeichert':`Bewertung gespeichert: ${fmt(avg(sc.filter(x=>x!=null)))}`);back();
+  };
+  if(t)document.getElementById('dl').onclick=()=>undoable('Test gelöscht',()=>{D().tests=D().tests.filter(x=>x.id!==t.id);stack.pop();render('pop');});
+}
+
+/* ---------- Backup ---------- */
+function lastBackup(){try{return localStorage.getItem(KEY+'-backup');}catch(e){return null;}}
+function markBackup(){try{localStorage.setItem(KEY+'-backup',new Date().toISOString());}catch(e){}}
+function backupData(){const d=D();return {app:'geschmackstagebuch',version:1,exported:new Date().toISOString(),categories:d.categories,entries:d.entries.map(({photo,...r})=>r),tests:d.tests};}
+function csvData(){
+  const d=D();const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const rows=[['Kategorie','Eintrag','Marke','Tags','Status','Datum','Gesamt','Kriterien','Notiz']];
+  d.entries.forEach(e=>{const c=cat(e.catId);const ts=testsOf(e.id);
+    if(!ts.length)rows.push([c.name,e.name,e.brand,e.tags.join(', '),'Merkliste','','','','']);
+    ts.forEach(t=>rows.push([c.name,e.name,e.brand,e.tags.join(', '),'Getestet',t.date,fmt(testScore(t)),c.criteria.map((cr,i)=>`${cr}: ${t.scores[i]??'–'}`).join('; '),t.comment]));});
+  return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
+}
+async function saveFile(name,text,type){
+  const file=new File([text],name,{type});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return true;}}
+  catch(e){if(e.name==='AbortError')return false;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);return true;
+}
+function vBackup(){
+  bar('Backup');
+  const d=D();const lb=lastBackup();const stamp=today();
+  $view.innerHTML=`<div class="screen"><h1 class="lt">Backup</h1><p class="lead">Deine Daten liegen nur auf diesem Handy. Sichere sie regelmäßig, z. B. in Google Drive.</p>
+  <div class="set"><b>Backup speichern</b><span class="small muted">${d.categories.length} Kategorien, ${d.entries.length} Einträge, ${d.tests.length} Tests, ohne Fotos.<br>${lb?`Letztes Backup am ${fmtDate(lb.slice(0,10))}.`:'Du hast noch kein Backup.'}</span>
+    <button class="btn" id="ej">Backup speichern</button>
+    <button class="btn sec" id="ec" style="margin-top:10px">Als Tabelle für Excel exportieren</button></div>
+  <div class="set"><b>Backup wiederherstellen</b><span class="small muted">Ersetzt alle Daten auf diesem Gerät durch die Backup-Datei.</span>
+    <label class="btn sec" style="cursor:pointer">Backup-Datei auswählen<input type="file" accept=".json,application/json" id="imf" hidden></label></div>
+  <button class="dangerlink" id="rs">Alle Daten löschen</button></div>`;
+  document.getElementById('ej').onclick=async()=>{if(await saveFile(`geschmackstagebuch-${stamp}.json`,JSON.stringify(backupData(),null,1),'application/json')){markBackup();toast('Backup gespeichert');render();}};
+  document.getElementById('ec').onclick=()=>saveFile(`geschmackstagebuch-${stamp}.csv`,csvData(),'text/csv');
+  document.getElementById('imf').onchange=async ev=>{
+    const f=ev.target.files[0];ev.target.value='';if(!f)return;let x;
+    try{x=JSON.parse(await f.text());}catch(err){toast('Diese Datei ist kein Backup des Geschmackstagebuchs.');return;}
+    if(x.app!=='geschmackstagebuch'||!Array.isArray(x.categories)){toast('Diese Datei ist kein Backup des Geschmackstagebuchs.');return;}
+    ask('Backup wiederherstellen?',`Backup vom ${fmtDate(x.exported.slice(0,10))} mit ${x.entries.length} Einträgen. Deine aktuellen Daten werden ersetzt.`,'Wiederherstellen',()=>undoable('Backup wiederhergestellt',()=>{
+      const photos=Object.fromEntries(D().entries.filter(e=>e.photo).map(e=>[e.id,e.photo]));
+      mem={categories:x.categories,entries:x.entries.map(e=>({...e,photo:photos[e.id]||null})),tests:x.tests};reset();}));
+  };
+  document.getElementById('rs').onclick=()=>ask('Alle Daten löschen?','Alle Kategorien, Einträge, Tests und Fotos auf diesem Gerät werden entfernt.','Alles löschen',()=>undoable('Alle Daten gelöscht',()=>{mem=empty();reset();}));
+}
+
+if('serviceWorker' in navigator && location.protocol!=='blob:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+init();
+</script>
+</body>
+</html>
