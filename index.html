@@ -210,6 +210,7 @@ textarea.in{min-height:110px;resize:vertical;line-height:1.5}
 .set{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
 .set b{display:block;font-size:17px;margin-bottom:2px}
 .set .btn{width:100%;margin-top:14px;flex:none;display:flex;align-items:center;justify-content:center}
+.set .btn.sec{background:var(--surface2);box-shadow:none}
 
 /* Toast & Sheet */
 .toast{position:fixed;z-index:40;left:50%;bottom:calc(96px + var(--safe-b));transform:translateX(-50%);width:min(440px,calc(100% - 32px));display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--bg);padding:12px 12px 12px 18px;border-radius:16px;font-size:15px;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);animation:toastIn .22s ease-out}
@@ -227,6 +228,7 @@ textarea.in{min-height:110px;resize:vertical;line-height:1.5}
 @keyframes fade{from{opacity:0}}
 @keyframes up{from{transform:translateY(100%)}}
 </style>
+<script src="xlsx.mini.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -283,16 +285,20 @@ function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('geschmacks
 async function idbGet(){const db=await idb();return new Promise((res,rej)=>{const q=db.transaction('kv').objectStore('kv').get(KEY);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
 async function idbPut(v){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,KEY);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
 const empty=()=>({categories:[],entries:[],tests:[]});
+async function idbGetK(k){const db=await idb();return new Promise((res,rej)=>{const q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function idbPutK(k,v){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');const st=tx.objectStore('kv');v===undefined?st.delete(k):st.put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
 async function init(){
   try{mem=await idbGet();}catch(e){}
   if(!mem){try{const raw=localStorage.getItem(KEY);if(raw)mem=JSON.parse(raw);}catch(e){}}
   if(!mem) mem=empty();
   try{navigator.storage?.persist?.();}catch(e){}
+  await autoInit();
   render();
 }
 function save(){
   mem.lastChange=new Date().toISOString();
   idbPut(mem).catch(()=>{try{localStorage.setItem(KEY,JSON.stringify(mem));}catch(e){toast('Speichern fehlgeschlagen. Bitte ein Backup erstellen.');}});
+  autoSchedule();
 }
 const D=()=>mem;
 
@@ -361,7 +367,7 @@ function render(dir){
 
 /* ---------- Startseite ---------- */
 function vHome(){
-  bar('Geschmackstagebuch',`<button class="ib" id="bk" aria-label="Backup">${I.save}</button>`);
+  bar('Geschmackstagebuch',`<button class="ib" id="bk" aria-label="Sicherung">${I.save}</button>`);
   document.getElementById('bk').onclick=()=>go({v:'backup'});
   const cats=D().categories;
   let h=`<div class="screen"><h1 class="lt">Geschmacks&shy;tagebuch</h1>`;
@@ -374,8 +380,10 @@ function vHome(){
   h+=`<p class="lead">${cats.length} ${cats.length===1?'Kategorie':'Kategorien'}, ${n} ${n===1?'Test':'Tests'}</p>`;
   h+=`<div class="search">${I.search}<input id="hq" type="search" placeholder="Alles durchsuchen" value="${esc(ui.hq)}" autocomplete="off"></div><div id="hres"></div>`;
   const lb=lastBackup(),lc=D().lastChange;
-  if(lc&&(!lb||lc>lb)){const days=lb?Math.floor((Date.now()-new Date(lb))/864e5):null;
-    if(days===null||days>=14) h+=`<button class="note-box" id="bkh" style="border:0;width:100%;text-align:left">💾 ${days===null?'Du hast noch kein Backup.':`Dein letztes Backup ist ${days} Tage alt.`} <b style="color:var(--accent)">Jetzt sichern</b></button>`;}
+  if(auto.handle&&auto.state==='needs-permission') h+=`<button class="note-box" id="bkp" style="border:0;width:100%;text-align:left">📄 Excel-Sicherung pausiert. <b style="color:var(--accent)">Tippen zum Fortsetzen</b></button>`;
+  else if(auto.state==='error') h+=`<button class="note-box" id="bkh" style="border:0;width:100%;text-align:left;background:color-mix(in srgb,var(--danger) 14%,transparent)">⚠️ Die Excel-Datei konnte nicht gespeichert werden. <b>Ansehen</b></button>`;
+  else if(!auto.handle&&lc&&(!lb||lc>lb)){const days=lb?Math.floor((Date.now()-new Date(lb))/864e5):null;
+    if(days===null||days>=14) h+=`<button class="note-box" id="bkh" style="border:0;width:100%;text-align:left">💾 ${days===null?'Deine Daten sind noch nicht gesichert.':`Dein letztes Backup ist ${days} Tage alt.`} <b style="color:var(--accent)">Excel-Sicherung einrichten</b></button>`;}
   h+=`<div class="grid" id="tiles">`;
   cats.forEach(c=>{
     const es=D().entries.filter(e=>e.catId===c.id);const tested=es.filter(e=>e.status==='tested');
@@ -390,6 +398,7 @@ function vHome(){
   $view.querySelectorAll('[data-c]').forEach(el=>el.onclick=()=>{ui={...ui,tab:'rank',q:'',tag:null};go({v:'cat',id:el.dataset.c});});
   document.getElementById('addc').onclick=()=>go({v:'catForm'});
   const bkh=document.getElementById('bkh');if(bkh)bkh.onclick=()=>go({v:'backup'});
+  const bkp=document.getElementById('bkp');if(bkp)bkp.onclick=async()=>{if(await autoResume())toast('Excel-Sicherung läuft wieder');render();};
   const hq=document.getElementById('hq');
   const drawRes=()=>{
     const q=ui.hq.trim().toLowerCase();const box=document.getElementById('hres');const tiles=document.getElementById('tiles');
@@ -623,46 +632,131 @@ function vTestForm(s){
   if(t)document.getElementById('dl').onclick=()=>undoable('Test gelöscht',()=>{D().tests=D().tests.filter(x=>x.id!==t.id);stack.pop();render('pop');});
 }
 
-/* ---------- Backup ---------- */
+/* ---------- Backup & Excel ---------- */
+const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const BK_SHEET='Backup (nicht ändern)';
 function lastBackup(){try{return localStorage.getItem(KEY+'-backup');}catch(e){return null;}}
 function markBackup(){try{localStorage.setItem(KEY+'-backup',new Date().toISOString());}catch(e){}}
 function backupData(){const d=D();return {app:'geschmackstagebuch',version:1,exported:new Date().toISOString(),categories:d.categories,entries:d.entries.map(({photo,...r})=>r),tests:d.tests};}
-function csvData(){
-  const d=D();const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
-  const rows=[['Kategorie','Eintrag','Marke','Tags','Status','Datum','Gesamt','Kriterien','Notiz']];
-  d.entries.forEach(e=>{const c=cat(e.catId);const ts=testsOf(e.id);
-    if(!ts.length)rows.push([c.name,e.name,e.brand,e.tags.join(', '),'Merkliste','','','','']);
-    ts.forEach(t=>rows.push([c.name,e.name,e.brand,e.tags.join(', '),'Getestet',t.date,fmt(testScore(t)),c.criteria.map((cr,i)=>`${cr}: ${t.scores[i]??'–'}`).join('; '),t.comment]));});
-  return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
+const num=v=>v==null?null:Math.round(v*10)/10;
+function sheetName(n,used){let b=String(n).replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,28)||'Kategorie';let x=b,i=2;while(used.has(x.toLowerCase())){x=`${b.slice(0,25)} ${i++}`;}used.add(x.toLowerCase());return x;}
+function buildWorkbook(){
+  const d=D();const wb=XLSX.utils.book_new();const used=new Set(['übersicht',BK_SHEET.toLowerCase()]);
+  // Übersicht: Ranking je Kategorie
+  const ov=[['Kategorie','Rang','Eintrag','Marke','Note (Ø)','Tests','Zuletzt getestet','Tags','Status']];
+  d.categories.forEach(c=>{
+    const es=d.entries.filter(e=>e.catId===c.id).map(e=>({e,s:entryScore(e.id),ts:testsOf(e.id)}));
+    es.sort((a,b)=>(b.s??-1)-(a.s??-1)||a.e.name.localeCompare(b.e.name,'de'));
+    let r=0;es.forEach(x=>ov.push([c.name,x.s!=null?++r:null,x.e.name,x.e.brand||'',num(x.s),x.ts.length,x.ts[0]?.date||'',x.e.tags.join(', '),x.ts.length?'Getestet':'Merkliste']));
+  });
+  const ws=XLSX.utils.aoa_to_sheet(ov);ws['!cols']=[{wch:20},{wch:6},{wch:26},{wch:18},{wch:9},{wch:6},{wch:14},{wch:22},{wch:10}];ws['!autofilter']={ref:ws['!ref']};
+  XLSX.utils.book_append_sheet(wb,ws,'Übersicht');
+  // Ein Blatt je Kategorie mit allen Tests
+  d.categories.forEach(c=>{
+    const rows=[['Eintrag','Marke','Datum',...c.criteria,'Gesamt','Notiz','Tags']];
+    d.entries.filter(e=>e.catId===c.id).sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(e=>{
+      testsOf(e.id).slice().reverse().forEach(t=>rows.push([e.name,e.brand||'',t.date,...c.criteria.map((_,i)=>t.scores[i]??null),num(testScore(t)),t.comment||'',e.tags.join(', ')]));});
+    const w=XLSX.utils.aoa_to_sheet(rows);w['!cols']=[{wch:26},{wch:18},{wch:11},...c.criteria.map(()=>({wch:12})),{wch:8},{wch:50},{wch:20}];
+    XLSX.utils.book_append_sheet(wb,w,sheetName(c.name,used));
+  });
+  // Maschinenlesbares Backup zum Wiederherstellen
+  const json=JSON.stringify(backupData());const chunks=[['Dieses Blatt wird zum Wiederherstellen gebraucht. Bitte nicht ändern.']];
+  for(let i=0;i<json.length;i+=30000)chunks.push([json.slice(i,i+30000)]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(chunks),BK_SHEET);
+  return wb;
 }
-async function saveFile(name,text,type){
-  const file=new File([text],name,{type});
+function workbookBlob(){const out=XLSX.write(buildWorkbook(),{bookType:'xlsx',type:'array',compression:true});return new Blob([out],{type:XLSX_MIME});}
+function readBackupFile(buf,name){
+  if(/\.json$/i.test(name)) return JSON.parse(new TextDecoder().decode(buf));
+  const wb=XLSX.read(buf,{type:'array'});const ws=wb.Sheets[BK_SHEET];if(!ws)throw new Error('kein Backup-Blatt');
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true});return JSON.parse(rows.slice(1).map(r=>r[0]||'').join(''));
+}
+
+/* Automatische Sicherung in eine Datei auf dem Handy */
+const auto={handle:null,state:'off',last:null,err:''};
+const autoSupported=()=>'showSaveFilePicker' in window;
+async function autoInit(){
+  if(!autoSupported())return;
+  try{auto.handle=await idbGetK('autofile')||null;auto.last=await idbGetK('autofile-last')||null;}catch(e){}
+  if(!auto.handle)return;
+  try{auto.state=(await auto.handle.queryPermission({mode:'readwrite'}))==='granted'?'on':'needs-permission';}catch(e){auto.state='needs-permission';}
+  if(auto.state==='on'&&D().lastChange&&(!auto.last||D().lastChange>auto.last))autoWrite();
+}
+let autoTimer=null;
+function autoSchedule(){if(!auto.handle||auto.state==='needs-permission')return;clearTimeout(autoTimer);autoTimer=setTimeout(autoWrite,1200);}
+async function autoWrite(){
+  if(!auto.handle)return false;
+  try{
+    const w=await auto.handle.createWritable();await w.write(workbookBlob());await w.close();
+    auto.state='on';auto.err='';auto.last=new Date().toISOString();idbPutK('autofile-last',auto.last).catch(()=>{});markBackup();
+    refreshAutoUi();return true;
+  }catch(e){
+    if(e.name==='NotAllowedError'||e.name==='SecurityError')auto.state='needs-permission';
+    else{auto.state='error';auto.err=e.message||e.name;}
+    refreshAutoUi();return false;
+  }
+}
+async function autoResume(){
+  if(!auto.handle)return false;
+  try{if((await auto.handle.requestPermission({mode:'readwrite'}))!=='granted'){toast('Ohne Erlaubnis kann die App die Datei nicht aktualisieren.');return false;}}catch(e){return false;}
+  auto.state='on';return autoWrite();
+}
+async function autoSetup(){
+  let h;
+  try{h=await showSaveFilePicker({suggestedName:'Geschmackstagebuch.xlsx',types:[{description:'Excel-Datei',accept:{[XLSX_MIME]:['.xlsx']}}]});}
+  catch(e){if(e.name!=='AbortError')toast('Die Datei konnte nicht angelegt werden.');return;}
+  auto.handle=h;auto.state='on';await idbPutK('autofile',h).catch(()=>{});
+  if(await autoWrite()){buzz();toast('Excel-Sicherung eingerichtet');}
+  render();
+}
+async function autoOff(){auto.handle=null;auto.state='off';auto.last=null;await idbPutK('autofile',undefined).catch(()=>{});await idbPutK('autofile-last',undefined).catch(()=>{});toast('Excel-Sicherung ausgeschaltet. Die Datei bleibt erhalten.');render();}
+function refreshAutoUi(){const top=stack[stack.length-1].v;if((top==='backup'||top==='home')&&!$layer.innerHTML){const y=scrollY;render();scrollTo(0,y);}}
+const fmtTime=iso=>{const d=new Date(iso);const t=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?`heute, ${t} Uhr`:`${d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})}, ${t} Uhr`;};
+
+async function saveFile(name,blob){
+  const file=new File([blob],name,{type:blob.type});
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return true;}}
   catch(e){if(e.name==='AbortError')return false;}
   const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);return true;
 }
 function vBackup(){
-  bar('Backup');
+  bar('Sicherung');
   const d=D();const lb=lastBackup();const stamp=today();
-  $view.innerHTML=`<div class="screen"><h1 class="lt">Backup</h1><p class="lead">Deine Daten liegen nur auf diesem Handy. Sichere sie regelmäßig, z. B. in Google Drive.</p>
-  <div class="set"><b>Backup speichern</b><span class="small muted">${d.categories.length} Kategorien, ${d.entries.length} Einträge, ${d.tests.length} Tests, ohne Fotos.<br>${lb?`Letztes Backup am ${fmtDate(lb.slice(0,10))}.`:'Du hast noch kein Backup.'}</span>
-    <button class="btn" id="ej">Backup speichern</button>
-    <button class="btn sec" id="ec" style="margin-top:10px">Als Tabelle für Excel exportieren</button></div>
-  <div class="set"><b>Backup wiederherstellen</b><span class="small muted">Ersetzt alle Daten auf diesem Gerät durch die Backup-Datei.</span>
-    <label class="btn sec" style="cursor:pointer">Backup-Datei auswählen<input type="file" accept=".json,application/json" id="imf" hidden></label></div>
+  let autoHtml;
+  if(!autoSupported()) autoHtml=`<div class="set"><b>Automatische Excel-Sicherung</b><span class="small muted">Dieser Browser kann keine Dateien automatisch aktualisieren. Öffne die App in Chrome auf Android oder am PC, oder sichere unten von Hand.</span></div>`;
+  else if(!auto.handle) autoHtml=`<div class="set"><b>Automatische Excel-Sicherung</b><span class="small muted">Wähle einmal einen Speicherort, z. B. den Ordner „Documents". Danach aktualisiert die App die Excel-Datei nach jeder Änderung von selbst. Sie bleibt erhalten, auch wenn Chrome-Daten gelöscht werden.</span>
+    <button class="btn" id="as">Excel-Datei einrichten</button></div>`;
+  else{
+    const st={on:['✅','Aktiv'],'needs-permission':['⏸️','Pausiert, Erlaubnis nötig'],error:['⚠️','Fehler beim Speichern']}[auto.state]||['✅','Aktiv'];
+    autoHtml=`<div class="set"><b>Automatische Excel-Sicherung</b>
+    <div class="li" style="padding:12px 0 4px;cursor:default"><span class="av" style="background:color-mix(in srgb,var(--accent) 16%,transparent);font-size:20px">📄</span><span class="main"><span class="nm" style="display:block">${esc(auto.handle.name)}</span><span class="sub" style="display:block">${st[0]} ${st[1]}${auto.last?`, gespeichert ${fmtTime(auto.last)}`:''}</span></span></div>
+    ${auto.state==='needs-permission'?`<span class="small muted">Android fragt nach einem Neustart der App manchmal erneut nach der Erlaubnis.</span><button class="btn" id="ar">Sicherung fortsetzen</button>`:''}
+    ${auto.state==='error'?`<span class="small muted">${esc(auto.err)}. Wurde die Datei verschoben oder gelöscht? Richte sie dann neu ein.</span><button class="btn" id="aw">Erneut versuchen</button><button class="btn sec" id="as" style="margin-top:10px">Neue Datei wählen</button>`:''}
+    ${auto.state==='on'?`<button class="btn sec" id="aw">Jetzt speichern</button>`:''}
+    <button class="linkbtn" id="ao" style="margin-top:8px">Ausschalten</button></div>`;
+  }
+  $view.innerHTML=`<div class="screen"><h1 class="lt">Sicherung</h1><p class="lead">Die App speichert intern in Chrome. Mit einer Excel-Datei auf deinem Handy sind deine Bewertungen zusätzlich sicher.</p>
+  ${autoHtml}
+  <div class="set"><b>Excel-Datei teilen</b><span class="small muted">Einmalige Kopie, z. B. für Google Drive oder per Mail. ${d.categories.length} Kategorien, ${d.entries.length} Einträge, ${d.tests.length} Tests, ohne Fotos.${!auto.handle&&lb?` Zuletzt am ${fmtDate(lb.slice(0,10))}.`:''}</span>
+    <button class="btn sec" id="ex">Excel-Datei teilen</button></div>
+  <div class="set"><b>Wiederherstellen</b><span class="small muted">Lädt deine Daten aus einer Excel-Sicherung (oder einem alten JSON-Backup). Ersetzt alles auf diesem Gerät.</span>
+    <label class="btn sec" style="cursor:pointer">Sicherung auswählen<input type="file" accept=".xlsx,.json,${XLSX_MIME},application/json" id="imf" hidden></label></div>
   <button class="dangerlink" id="rs">Alle Daten löschen</button></div>`;
-  document.getElementById('ej').onclick=async()=>{if(await saveFile(`geschmackstagebuch-${stamp}.json`,JSON.stringify(backupData(),null,1),'application/json')){markBackup();toast('Backup gespeichert');render();}};
-  document.getElementById('ec').onclick=()=>saveFile(`geschmackstagebuch-${stamp}.csv`,csvData(),'text/csv');
+  const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
+  on('as',autoSetup);on('ar',async()=>{if(await autoResume())toast('Excel-Sicherung läuft wieder');render();});
+  on('aw',async()=>{if(await autoWrite())toast('Excel-Datei gespeichert');});
+  on('ao',()=>ask('Excel-Sicherung ausschalten?','Die vorhandene Datei bleibt auf dem Handy, wird aber nicht mehr aktualisiert.','Ausschalten',autoOff));
+  on('ex',async()=>{if(await saveFile(`Geschmackstagebuch-${stamp}.xlsx`,workbookBlob())){if(!auto.handle)markBackup();toast('Excel-Datei erstellt');}});
   document.getElementById('imf').onchange=async ev=>{
     const f=ev.target.files[0];ev.target.value='';if(!f)return;let x;
-    try{x=JSON.parse(await f.text());}catch(err){toast('Diese Datei ist kein Backup des Geschmackstagebuchs.');return;}
-    if(x.app!=='geschmackstagebuch'||!Array.isArray(x.categories)){toast('Diese Datei ist kein Backup des Geschmackstagebuchs.');return;}
-    ask('Backup wiederherstellen?',`Backup vom ${fmtDate(x.exported.slice(0,10))} mit ${x.entries.length} Einträgen. Deine aktuellen Daten werden ersetzt.`,'Wiederherstellen',()=>undoable('Backup wiederhergestellt',()=>{
+    try{x=readBackupFile(await f.arrayBuffer(),f.name);}catch(err){toast('Diese Datei ist keine Sicherung des Geschmackstagebuchs.');return;}
+    if(x.app!=='geschmackstagebuch'||!Array.isArray(x.categories)){toast('Diese Datei ist keine Sicherung des Geschmackstagebuchs.');return;}
+    ask('Sicherung wiederherstellen?',`Stand vom ${fmtDate(x.exported.slice(0,10))} mit ${x.entries.length} Einträgen und ${x.tests.length} Tests. Deine aktuellen Daten werden ersetzt.`,'Wiederherstellen',()=>undoable('Sicherung wiederhergestellt',()=>{
       const photos=Object.fromEntries(D().entries.filter(e=>e.photo).map(e=>[e.id,e.photo]));
       mem={categories:x.categories,entries:x.entries.map(e=>({...e,photo:photos[e.id]||null})),tests:x.tests};reset();}));
   };
-  document.getElementById('rs').onclick=()=>ask('Alle Daten löschen?','Alle Kategorien, Einträge, Tests und Fotos auf diesem Gerät werden entfernt.','Alles löschen',()=>undoable('Alle Daten gelöscht',()=>{mem=empty();reset();}));
+  on('rs',()=>ask('Alle Daten löschen?','Alle Kategorien, Einträge, Tests und Fotos in der App werden entfernt. Eine Excel-Sicherung wird danach mit dem leeren Stand überschrieben.','Alles löschen',()=>undoable('Alle Daten gelöscht',()=>{mem=empty();reset();})));
 }
 
 if('serviceWorker' in navigator && location.protocol!=='blob:') navigator.serviceWorker.register('sw.js').catch(()=>{});

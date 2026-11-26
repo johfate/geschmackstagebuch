@@ -1,6 +1,6 @@
 // Version erhöhen, wenn du Dateien änderst -> Handy lädt die neue Version
-const CACHE = 'geschmackstagebuch-v2';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './font.woff2'];
+const CACHE = 'geschmackstagebuch-v3';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './font.woff2', './xlsx.mini.min.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });

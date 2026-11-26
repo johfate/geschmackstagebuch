@@ -13,6 +13,10 @@ Private Bewertungs-App als PWA. Alle Daten bleiben lokal auf dem Gerät (Indexed
 Geänderte Dateien hochladen und in `sw.js` die Versionsnummer (z. B. `geschmackstagebuch-v2` → `v3`) erhöhen.
 Die App holt sich die neue Version beim nächsten Öffnen mit Internet. Deine Daten bleiben erhalten.
 
-## Backup
-In der App oben rechts ⇅ → „Backup-Datei (JSON)". Am besten in Google Drive speichern.
-Wichtig: Chrome-Websitedaten löschen oder die App deinstallieren löscht auch die Daten.
+## Sicherung
+Startseite → Pfeil oben rechts → „Excel-Datei einrichten". Einmal einen Speicherort wählen (z. B. „Documents").
+Danach schreibt die App nach jeder Änderung automatisch in diese Excel-Datei. Sie bleibt erhalten,
+auch wenn Chrome-Daten gelöscht werden. Wiederherstellen: „Sicherung auswählen" → die Excel-Datei.
+Fotos sind nicht enthalten. Das Blatt „Backup (nicht ändern)" wird zum Wiederherstellen gebraucht.
+
+Verwendet SheetJS Community Edition (Apache-2.0, siehe xlsx-LICENSE.txt).
